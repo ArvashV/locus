@@ -250,6 +250,7 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _locationGranted = false;
   bool _backgroundLocationGranted = false;
   bool _notificationGranted = false;
+  bool _batteryOptimizationDisabled = false;
 
   @override
   void initState() {
@@ -283,11 +284,13 @@ class _SetupScreenState extends State<SetupScreen> {
     final locationStatus = await Permission.location.status;
     final backgroundStatus = await Permission.locationAlways.status;
     final notificationStatus = await Permission.notification.status;
+    final batteryStatus = await Permission.ignoreBatteryOptimizations.status;
 
     setState(() {
       _locationGranted = locationStatus.isGranted;
       _backgroundLocationGranted = backgroundStatus.isGranted;
       _notificationGranted = notificationStatus.isGranted;
+      _batteryOptimizationDisabled = batteryStatus.isGranted;
     });
   }
 
@@ -310,6 +313,15 @@ class _SetupScreenState extends State<SetupScreen> {
     setState(() {
       _notificationGranted = status.isGranted;
     });
+  }
+
+  Future<void> _requestBatteryOptimizationExemption() async {
+    if (Platform.isAndroid) {
+      final status = await Permission.ignoreBatteryOptimizations.request();
+      setState(() {
+        _batteryOptimizationDisabled = status.isGranted;
+      });
+    }
   }
 
   Future<void> _saveAndContinue() async {
@@ -504,11 +516,11 @@ class _SetupScreenState extends State<SetupScreen> {
         ),
         const SizedBox(height: 12),
         _buildPermissionCard(
-          icon: Icons.notifications_outlined,
-          title: 'Notifications',
-          description: 'Show tracking status notification',
-          isGranted: _notificationGranted,
-          onRequest: _requestNotificationPermission,
+          icon: Icons.battery_saver_outlined,
+          title: 'Disable Battery Optimization',
+          description: 'Keeps tracking when app is killed',
+          isGranted: _batteryOptimizationDisabled,
+          onRequest: _requestBatteryOptimizationExemption,
           isRequired: false,
         ),
         const Spacer(),
@@ -705,6 +717,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       Permission.location,
       Permission.locationAlways,
       Permission.notification,
+      Permission.ignoreBatteryOptimizations,
     ].request();
   }
 
@@ -741,6 +754,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('current_session_id', sessionId);
       await prefs.setInt('session_end_time', endTime);
+      await prefs.setBool('service_should_be_running', true);
 
       final service = FlutterBackgroundService();
       if (!await service.isRunning()) {
@@ -765,6 +779,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('current_session_id');
     await prefs.remove('session_end_time');
+    await prefs.setBool('service_should_be_running', false);
 
     final service = FlutterBackgroundService();
     service.invoke("stopService");

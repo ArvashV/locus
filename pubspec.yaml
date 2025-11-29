@@ -71,6 +71,7 @@ flutter:
   # App assets
   assets:
     - assets/locus.png
+    - assets/locus_foreground.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -106,6 +107,7 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/locus.png"
-  adaptive_icon_background: "#09090B"
-  adaptive_icon_foreground: "assets/locus.png"
+  image_path: "assets/locus_foreground.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/locus_foreground.png"
+  min_sdk_android: 21
