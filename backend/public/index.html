@@ -153,14 +153,18 @@
             }
 
             sessions.forEach(session => {
-                const isActive = session.isActive === 1 && Date.now() < session.endTime;
+                // Parse timestamps - handle both integer and string formats
+                const startTimeMs = parseInt(session.startTime) || new Date(session.startTime).getTime();
+                const endTimeMs = parseInt(session.endTime) || new Date(session.endTime).getTime();
+                
+                const isActive = session.isActive === 1 && Date.now() < endTimeMs;
                 const el = document.createElement('div');
                 const isSelected = activeSessionId === session.id;
                 
                 el.className = `group p-4 rounded-xl cursor-pointer transition-all duration-200 border ${isSelected ? 'bg-white/5 border-emerald-500/30 shadow-lg' : 'bg-transparent border-transparent hover:bg-white/5 hover:border-white/5'}`;
-                el.onclick = () => loadSession(session);
+                el.onclick = () => loadSession({...session, startTimeMs, endTimeMs});
                 
-                const startTime = new Date(session.startTime);
+                const startTime = new Date(startTimeMs);
                 const timeStr = startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const dateStr = startTime.toLocaleDateString([], { month: 'short', day: 'numeric' });
 
@@ -200,13 +204,17 @@
             document.getElementById('info-id').textContent = session.id;
             document.getElementById('info-device').textContent = session.deviceId;
             
-            const isActive = session.isActive === 1 && Date.now() < session.endTime;
+            // Use pre-parsed timestamps
+            const startTimeMs = session.startTimeMs || parseInt(session.startTime) || new Date(session.startTime).getTime();
+            const endTimeMs = session.endTimeMs || parseInt(session.endTime) || new Date(session.endTime).getTime();
+            
+            const isActive = session.isActive === 1 && Date.now() < endTimeMs;
             const badge = document.getElementById('info-status-badge');
             badge.className = `w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-red-500'}`;
 
             // Calculate Duration
-            const start = new Date(session.startTime);
-            const end = isActive ? new Date() : new Date(session.endTime);
+            const start = new Date(startTimeMs);
+            const end = isActive ? new Date() : new Date(endTimeMs);
             const diffHrs = ((end - start) / 36e5).toFixed(1);
             document.getElementById('info-duration').textContent = `${diffHrs} hrs`;
 
@@ -233,7 +241,8 @@
                 document.getElementById('info-points').textContent = locations.length;
                 if (locations.length > 0) {
                     const lastLoc = locations[locations.length - 1];
-                    document.getElementById('info-last').textContent = new Date(lastLoc.timestamp).toLocaleTimeString();
+                    const lastTimestamp = parseInt(lastLoc.timestamp) || new Date(lastLoc.timestamp).getTime();
+                    document.getElementById('info-last').textContent = new Date(lastTimestamp).toLocaleTimeString();
                 } else {
                     document.getElementById('info-last').textContent = '-';
                 }
