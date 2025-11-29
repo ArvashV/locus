@@ -31,6 +31,15 @@
         @media (max-width: 768px) {
             .leaflet-control-zoom { display: none; }
         }
+
+        /* Animated path effect */
+        .animated-path {
+            stroke-dasharray: 10, 10;
+            animation: dash 1s linear infinite;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: -20; }
+        }
     </style>
 </head>
 <body class="overflow-hidden">
@@ -115,6 +124,7 @@
         }).addTo(map);
 
         let currentPolyline = null;
+        let currentPolylineBg = null;
         let currentMarkers = [];
         let activeSessionId = null;
         let refreshInterval = null;
@@ -202,6 +212,7 @@
 
             // Clear map
             if (currentPolyline) map.removeLayer(currentPolyline);
+            if (currentPolylineBg) map.removeLayer(currentPolylineBg);
             currentMarkers.forEach(m => map.removeLayer(m));
             currentMarkers = [];
 
@@ -229,15 +240,33 @@
 
                 const latlngs = locations.map(loc => [loc.latitude, loc.longitude]);
 
-                // Update Polyline
+                // Update Polylines - Background glow + Animated foreground
                 if (currentPolyline) map.removeLayer(currentPolyline);
-                currentPolyline = L.polyline(latlngs, { 
-                    color: '#10b981', // Emerald 500
-                    weight: 3, 
-                    opacity: 0.8,
+                if (currentPolylineBg) map.removeLayer(currentPolylineBg);
+
+                // Background glow line
+                currentPolylineBg = L.polyline(latlngs, { 
+                    color: '#10b981',
+                    weight: 8, 
+                    opacity: 0.2,
                     lineCap: 'round',
                     lineJoin: 'round'
                 }).addTo(map);
+
+                // Main path line
+                currentPolyline = L.polyline(latlngs, { 
+                    color: '#10b981', // Emerald 500
+                    weight: 3, 
+                    opacity: 0.9,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                    className: 'animated-path'
+                }).addTo(map);
+
+                // Fit map to show entire path
+                if (latlngs.length > 1) {
+                    map.fitBounds(currentPolyline.getBounds(), { padding: [50, 50] });
+                }
 
                 // Update Markers
                 currentMarkers.forEach(m => map.removeLayer(m));
@@ -258,8 +287,17 @@
                     });
                     currentMarkers.push(L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).addTo(map));
 
-                    // Pan to latest
-                    map.panTo(latlngs[latlngs.length - 1]);
+                    // Add intermediate waypoint markers for long paths
+                    if (latlngs.length > 5) {
+                        const step = Math.floor(latlngs.length / 5);
+                        for (let i = step; i < latlngs.length - 1; i += step) {
+                            const waypointIcon = L.divIcon({
+                                className: 'bg-transparent',
+                                html: '<div class="w-2 h-2 bg-emerald-400/50 rounded-full border border-emerald-500/30"></div>'
+                            });
+                            currentMarkers.push(L.marker(latlngs[i], { icon: waypointIcon }).addTo(map));
+                        }
+                    }
                 }
             } catch (err) {
                 console.error('Error fetching locations:', err);
