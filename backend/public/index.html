@@ -40,12 +40,38 @@
         @keyframes dash {
             to { stroke-dashoffset: -20; }
         }
+
+        /* Alert pulse animation */
+        @keyframes alertPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .alert-pulse { animation: alertPulse 2s ease-in-out infinite; }
     </style>
 </head>
 <body class="overflow-hidden">
 
     <!-- Map Background -->
     <div id="map" class="map-container absolute top-0 left-0"></div>
+
+    <!-- Alert Bell Button -->
+    <button id="alert-bell" onclick="toggleAlertPanel()" class="fixed top-4 right-4 md:top-4 md:right-96 w-12 h-12 glass-panel rounded-full flex items-center justify-center z-[1001] hover:bg-white/10 transition-all">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+        <span id="alert-badge" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center hidden">0</span>
+    </button>
+
+    <!-- Alert Panel -->
+    <div id="alert-panel" class="fixed top-20 right-4 w-80 max-h-[70vh] glass-panel rounded-2xl shadow-2xl z-[1001] hidden transition-all duration-300 opacity-0 translate-y-2">
+        <div class="p-4 border-b border-white/10 flex justify-between items-center">
+            <h2 class="text-sm font-medium text-zinc-200">🚨 Alerts</h2>
+            <button onclick="markAllAlertsRead()" class="text-[10px] text-zinc-500 hover:text-zinc-300">Mark all read</button>
+        </div>
+        <div id="alert-list" class="overflow-y-auto max-h-[50vh] p-3 space-y-2">
+            <div class="text-center text-zinc-600 text-xs py-8">No alerts</div>
+        </div>
+    </div>
 
     <!-- Floating Sidebar -->
     <aside class="fixed md:absolute bottom-0 md:bottom-4 left-0 md:left-4 w-full md:w-80 h-[40vh] md:h-auto md:top-4 glass-panel rounded-t-2xl md:rounded-2xl flex flex-col shadow-2xl z-[1000] transition-transform duration-300 transform translate-x-0">
@@ -316,6 +342,125 @@
         // Initial Load
         fetchSessions();
         setInterval(fetchSessions, 20000); // Refresh list every 20s
+
+        // ========== ALERTS SYSTEM ==========
+        let alertPanelOpen = false;
+
+        async function fetchAlerts() {
+            try {
+                const res = await fetch('/api/alerts');
+                const alerts = await res.json();
+                renderAlerts(alerts);
+                
+                // Update badge
+                const unreadCount = alerts.filter(a => a.isRead === 0).length;
+                updateAlertBadge(unreadCount);
+            } catch (err) {
+                console.error('Error fetching alerts:', err);
+            }
+        }
+
+        function updateAlertBadge(count) {
+            const badge = document.getElementById('alert-badge');
+            const bell = document.getElementById('alert-bell');
+            
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+                bell.classList.add('alert-pulse');
+            } else {
+                badge.classList.add('hidden');
+                bell.classList.remove('alert-pulse');
+            }
+        }
+
+        function renderAlerts(alerts) {
+            const container = document.getElementById('alert-list');
+            
+            if (alerts.length === 0) {
+                container.innerHTML = '<div class="text-center text-zinc-600 text-xs py-8">No alerts</div>';
+                return;
+            }
+
+            container.innerHTML = alerts.map(alert => {
+                const timestamp = parseInt(alert.timestamp) || new Date(alert.timestamp).getTime();
+                const timeAgo = getTimeAgo(timestamp);
+                const isUnread = alert.isRead === 0;
+                
+                const typeConfig = {
+                    'GEOFENCE_ENTERED': { icon: '📍', color: 'text-red-400', bg: 'bg-red-500/10' },
+                    'CONNECTIVITY_LOST': { icon: '📡', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+                };
+                const config = typeConfig[alert.type] || { icon: '⚠️', color: 'text-zinc-400', bg: 'bg-zinc-500/10' };
+
+                return `
+                    <div class="p-3 rounded-xl ${config.bg} ${isUnread ? 'border border-white/10' : 'opacity-60'}" onclick="markAlertRead(${alert.id})">
+                        <div class="flex items-start gap-3">
+                            <span class="text-lg">${config.icon}</span>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between items-start mb-1">
+                                    <span class="text-xs font-medium ${config.color}">${alert.type.replace('_', ' ')}</span>
+                                    ${isUnread ? '<span class="w-2 h-2 bg-red-500 rounded-full"></span>' : ''}
+                                </div>
+                                <p class="text-xs text-zinc-300 mb-1">${alert.message}</p>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[10px] text-zinc-500">${alert.deviceId || 'Unknown'}</span>
+                                    <span class="text-[10px] text-zinc-600">${timeAgo}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getTimeAgo(timestamp) {
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+            if (seconds < 60) return 'Just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+            return `${Math.floor(seconds / 86400)}d ago`;
+        }
+
+        function toggleAlertPanel() {
+            const panel = document.getElementById('alert-panel');
+            alertPanelOpen = !alertPanelOpen;
+            
+            if (alertPanelOpen) {
+                panel.classList.remove('hidden');
+                setTimeout(() => {
+                    panel.classList.remove('opacity-0', 'translate-y-2');
+                }, 10);
+                fetchAlerts();
+            } else {
+                panel.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => {
+                    panel.classList.add('hidden');
+                }, 300);
+            }
+        }
+
+        async function markAlertRead(alertId) {
+            try {
+                await fetch(`/api/alert/${alertId}/read`, { method: 'POST' });
+                fetchAlerts();
+            } catch (err) {
+                console.error('Error marking alert read:', err);
+            }
+        }
+
+        async function markAllAlertsRead() {
+            try {
+                await fetch('/api/alerts/read-all', { method: 'POST' });
+                fetchAlerts();
+            } catch (err) {
+                console.error('Error marking all alerts read:', err);
+            }
+        }
+
+        // Fetch alerts on load and periodically
+        fetchAlerts();
+        setInterval(fetchAlerts, 10000); // Check alerts every 10s
 
     </script>
 </body>

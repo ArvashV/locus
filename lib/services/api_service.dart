@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const String _baseUrlKey = 'api_base_url';
+  static const Duration _timeout = Duration(seconds: 15); // Timeout for HTTP requests
   
   // Default to localhost for emulator (10.0.2.2 for Android)
   // The user should change this in the app settings
@@ -29,7 +30,7 @@ class ApiService {
           'deviceId': deviceId,
           'duration': durationHours * 60 * 60 * 1000,
         }),
-      );
+      ).timeout(_timeout);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -47,7 +48,7 @@ class ApiService {
         Uri.parse('$baseUrl/api/session/stop'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'sessionId': sessionId}),
-      );
+      ).timeout(_timeout);
     } catch (e) {
       print('Error stopping session: $e');
     }
@@ -60,7 +61,7 @@ class ApiService {
         Uri.parse('$baseUrl/api/location'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(locations),
-      );
+      ).timeout(_timeout);
       return response.statusCode == 200;
     } catch (e) {
       print('Error sending locations: $e');
@@ -75,5 +76,28 @@ class ApiService {
       'longitude': lng,
       'timestamp': timestamp,
     }]);
+  }
+
+  /// Send an alert to the server
+  Future<bool> sendAlert(String sessionId, String alertType, String message, {double? lat, double? lng}) async {
+    final baseUrl = await getBaseUrl();
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/alert'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'sessionId': sessionId,
+          'type': alertType,
+          'message': message,
+          'latitude': lat,
+          'longitude': lng,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        }),
+      ).timeout(_timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error sending alert: $e');
+      return false;
+    }
   }
 }

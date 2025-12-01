@@ -39,6 +39,18 @@ async function initDB() {
                 timestamp BIGINT
             )
         `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS alerts (
+                id SERIAL PRIMARY KEY,
+                session_id TEXT REFERENCES sessions(id),
+                type TEXT,
+                message TEXT,
+                latitude REAL,
+                longitude REAL,
+                timestamp BIGINT,
+                is_read INTEGER DEFAULT 0
+            )
+        `);
         console.log('Database tables initialized');
     } catch (err) {
         console.error('Error initializing database:', err.message);
@@ -132,6 +144,71 @@ app.get('/api/session/:id/locations', async (req, res) => {
             [sessionId]
         );
         res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ========== ALERTS API ==========
+
+// Report an alert
+app.post('/api/alert', async (req, res) => {
+    const { sessionId, type, message, latitude, longitude, timestamp } = req.body;
+
+    try {
+        await pool.query(
+            `INSERT INTO alerts (session_id, type, message, latitude, longitude, timestamp) VALUES ($1, $2, $3, $4, $5, $6)`,
+            [sessionId, type, message, latitude || null, longitude || null, timestamp || Date.now()]
+        );
+        console.log(`🚨 ALERT: ${type} - ${message}`);
+        res.json({ message: 'Alert recorded' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get all alerts (unread first)
+app.get('/api/alerts', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT a.id, a.session_id as "sessionId", a.type, a.message, a.latitude, a.longitude, a.timestamp, a.is_read as "isRead", s.device_id as "deviceId"
+            FROM alerts a
+            LEFT JOIN sessions s ON a.session_id = s.id
+            ORDER BY a.is_read ASC, a.timestamp DESC
+            LIMIT 100
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get unread alert count
+app.get('/api/alerts/unread/count', async (req, res) => {
+    try {
+        const result = await pool.query(`SELECT COUNT(*) as count FROM alerts WHERE is_read = 0`);
+        res.json({ count: parseInt(result.rows[0].count) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Mark alert as read
+app.post('/api/alert/:id/read', async (req, res) => {
+    const alertId = req.params.id;
+    try {
+        await pool.query(`UPDATE alerts SET is_read = 1 WHERE id = $1`, [alertId]);
+        res.json({ message: 'Alert marked as read' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Mark all alerts as read
+app.post('/api/alerts/read-all', async (req, res) => {
+    try {
+        await pool.query(`UPDATE alerts SET is_read = 1`);
+        res.json({ message: 'All alerts marked as read' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

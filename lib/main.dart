@@ -12,12 +12,39 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeService();
   
+  // Check if service should be running and restart it if needed
+  await _checkAndRestartService();
+  
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
 
   runApp(const LocusApp());
+}
+
+/// Checks if service was running before app was killed and restarts it
+Future<void> _checkAndRestartService() async {
+  final prefs = await SharedPreferences.getInstance();
+  final shouldBeRunning = prefs.getBool('service_should_be_running') ?? false;
+  final sessionId = prefs.getString('current_session_id');
+  final endTime = prefs.getInt('session_end_time');
+  
+  if (shouldBeRunning && sessionId != null && endTime != null) {
+    // Check if session is still valid
+    if (DateTime.now().millisecondsSinceEpoch < endTime) {
+      final service = FlutterBackgroundService();
+      if (!await service.isRunning()) {
+        print('Restarting service after app relaunch...');
+        await service.startService();
+      }
+    } else {
+      // Session expired, clean up
+      await prefs.remove('current_session_id');
+      await prefs.remove('session_end_time');
+      await prefs.setBool('service_should_be_running', false);
+    }
+  }
 }
 
 class LocusApp extends StatelessWidget {
