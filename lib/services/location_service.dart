@@ -15,6 +15,7 @@ const notificationId = 888;
 const queueKey = 'offline_location_queue';
 const serviceRestartKey = 'service_should_be_running';
 const alertQueueKey = 'offline_alert_queue';
+const lastLocationKey = 'last_location_data';
 
 // Geofence Configuration - Cosmos Greens Bhiwadi
 const double _geofenceLat = 28.1944713;
@@ -24,7 +25,8 @@ const double _geofenceRadiusKm = 10.0; // 10 kilometers
 // Track alert states to avoid spamming
 const String _lastGeofenceAlertKey = 'last_geofence_alert';
 const String _lastConnectivityAlertKey = 'last_connectivity_alert';
-const int _alertCooldownMs = 5 * 60 * 1000; // 5 minutes cooldown between same alerts
+const int _alertCooldownMs =
+    5 * 60 * 1000; // 5 minutes cooldown between same alerts
 
 // Queue size limits to prevent memory issues on low-end devices
 const int _maxQueueSize = 500; // Max locations to queue offline
@@ -59,18 +61,26 @@ String _getRandomQuote() {
 }
 
 /// Calculate distance between two points using Haversine formula
-double _calculateDistanceKm(double lat1, double lon1, double lat2, double lon2) {
+double _calculateDistanceKm(
+  double lat1,
+  double lon1,
+  double lat2,
+  double lon2,
+) {
   const double earthRadiusKm = 6371.0;
-  
+
   final double dLat = _degreesToRadians(lat2 - lat1);
   final double dLon = _degreesToRadians(lon2 - lon1);
-  
-  final double a = sin(dLat / 2) * sin(dLat / 2) +
-      cos(_degreesToRadians(lat1)) * cos(_degreesToRadians(lat2)) *
-      sin(dLon / 2) * sin(dLon / 2);
-  
+
+  final double a =
+      sin(dLat / 2) * sin(dLat / 2) +
+      cos(_degreesToRadians(lat1)) *
+          cos(_degreesToRadians(lat2)) *
+          sin(dLon / 2) *
+          sin(dLon / 2);
+
   final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-  
+
   return earthRadiusKm * c;
 }
 
@@ -87,8 +97,8 @@ bool _isWithinGeofence(double lat, double lng) {
 /// Check internet connectivity
 Future<bool> _hasInternetConnection() async {
   final connectivityResult = await Connectivity().checkConnectivity();
-  return connectivityResult.isNotEmpty && 
-         !connectivityResult.contains(ConnectivityResult.none);
+  return connectivityResult.isNotEmpty &&
+      !connectivityResult.contains(ConnectivityResult.none);
 }
 
 Future<void> initializeService() async {
@@ -109,7 +119,8 @@ Future<void> initializeService() async {
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin
+      >()
       ?.createNotificationChannel(channel);
 
   // Initialize notifications without launch intent
@@ -162,7 +173,7 @@ void onStart(ServiceInstance service) async {
       title: "✨ Daily Inspiration",
       content: _getRandomQuote(),
     );
-    
+
     // Mark service as running for restart capability
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(serviceRestartKey, true);
@@ -186,7 +197,7 @@ void onStart(ServiceInstance service) async {
       print('Error getting SharedPreferences: $e');
       return; // Skip this cycle, try again next time
     }
-    
+
     final sessionId = prefs.getString('current_session_id');
     final endTimeMillis = prefs.getInt('session_end_time');
 
@@ -203,22 +214,24 @@ void onStart(ServiceInstance service) async {
           } catch (e) {
             hasInternet = false;
           }
-          
-          final lastConnectivityAlert = prefs.getInt(_lastConnectivityAlertKey) ?? 0;
+
+          final lastConnectivityAlert =
+              prefs.getInt(_lastConnectivityAlertKey) ?? 0;
           final now = DateTime.now().millisecondsSinceEpoch;
-          
-          if (!hasInternet && (now - lastConnectivityAlert > _alertCooldownMs)) {
+
+          if (!hasInternet &&
+              (now - lastConnectivityAlert > _alertCooldownMs)) {
             // Internet is off - queue alert
             print('⚠️ Internet connectivity lost!');
             await prefs.setInt(_lastConnectivityAlertKey, now);
-            
+
             final alert = {
               'sessionId': sessionId,
               'type': 'CONNECTIVITY_LOST',
               'message': 'Internet connection has been disabled on the device',
               'timestamp': now,
             };
-            
+
             List<String> alertQueue = prefs.getStringList(alertQueueKey) ?? [];
             // Limit alert queue size to prevent memory issues
             if (alertQueue.length < _maxAlertQueueSize) {
@@ -247,41 +260,97 @@ void onStart(ServiceInstance service) async {
               return; // Skip this cycle
             }
           }
-          
+
+          // Store accuracy and offline status for UI display
+          await prefs.setDouble('last_accuracy', position.accuracy);
+          await prefs.setBool('is_offline', !hasInternet);
+
+          // Calculate speed from previous location if available
+          double speed = position.speed >= 0
+              ? position.speed
+              : 0; // m/s from GPS
+          final lastLocationJson = prefs.getString(lastLocationKey);
+          if (lastLocationJson != null) {
+            try {
+              final lastLoc =
+                  jsonDecode(lastLocationJson) as Map<String, dynamic>;
+              final lastLat = lastLoc['latitude'] as double;
+              final lastLng = lastLoc['longitude'] as double;
+              final lastTime = lastLoc['timestamp'] as int;
+
+              final timeDiffSec = (now - lastTime) / 1000.0;
+              if (timeDiffSec > 0 && timeDiffSec < 120) {
+                // Only if reasonable time gap
+                final distanceKm = _calculateDistanceKm(
+                  lastLat,
+                  lastLng,
+                  position.latitude,
+                  position.longitude,
+                );
+                final calculatedSpeedKmh = (distanceKm / timeDiffSec) * 3600;
+                // Use calculated speed if GPS speed is unavailable or zero
+                if (speed <= 0 && calculatedSpeedKmh < 200) {
+                  // Sanity check: under 200 km/h
+                  speed = calculatedSpeedKmh / 3.6; // Convert back to m/s
+                }
+              }
+            } catch (e) {
+              print('Error calculating speed: $e');
+            }
+          }
+
+          // Store current location for next speed calculation
+          await prefs.setString(
+            lastLocationKey,
+            jsonEncode({
+              'latitude': position.latitude,
+              'longitude': position.longitude,
+              'timestamp': now,
+            }),
+          );
+
           // Check geofence
-          final isInGeofence = _isWithinGeofence(position.latitude, position.longitude);
+          final isInGeofence = _isWithinGeofence(
+            position.latitude,
+            position.longitude,
+          );
           final lastGeofenceAlert = prefs.getInt(_lastGeofenceAlertKey) ?? 0;
-          
+
           if (isInGeofence && (now - lastGeofenceAlert > _alertCooldownMs)) {
             // User is within restricted zone
             print('⚠️ User entered geofence zone!');
             await prefs.setInt(_lastGeofenceAlertKey, now);
-            
+
             final distance = _calculateDistanceKm(
-              position.latitude, position.longitude, 
-              _geofenceLat, _geofenceLng
+              position.latitude,
+              position.longitude,
+              _geofenceLat,
+              _geofenceLng,
             );
-            
+
             final alert = {
               'sessionId': sessionId,
               'type': 'GEOFENCE_ENTERED',
-              'message': 'Device entered restricted zone (${distance.toStringAsFixed(2)} km from center)',
+              'message':
+                  'Device entered restricted zone (${distance.toStringAsFixed(2)} km from center)',
               'latitude': position.latitude,
               'longitude': position.longitude,
               'timestamp': now,
             };
-            
+
             List<String> alertQueue = prefs.getStringList(alertQueueKey) ?? [];
             if (alertQueue.length < _maxAlertQueueSize) {
               alertQueue.add(jsonEncode(alert));
               await prefs.setStringList(alertQueueKey, alertQueue);
             }
           }
-          
+
           final newLocation = {
             'sessionId': sessionId,
             'latitude': position.latitude,
             'longitude': position.longitude,
+            'accuracy': position.accuracy,
+            'speed': speed, // m/s
             'timestamp': DateTime.now().millisecondsSinceEpoch,
           };
 
@@ -300,7 +369,7 @@ void onStart(ServiceInstance service) async {
             await prefs.setStringList(queueKey, queue);
             print('Queue full, removed oldest entries');
           }
-          
+
           print('📍 Queue size after adding: ${queue.length}');
 
           // Try to flush queues if we have internet
@@ -310,7 +379,7 @@ void onStart(ServiceInstance service) async {
             if (alertQueue.isNotEmpty) {
               print('Attempting to send ${alertQueue.length} alerts...');
               bool allAlertsSent = true;
-              
+
               for (final alertJson in alertQueue) {
                 try {
                   final alert = jsonDecode(alertJson) as Map<String, dynamic>;
@@ -331,27 +400,31 @@ void onStart(ServiceInstance service) async {
                   break;
                 }
               }
-              
+
               if (allAlertsSent) {
                 print('Successfully sent all alerts.');
                 await prefs.setStringList(alertQueueKey, []);
               }
             }
-            
+
             // Send locations in smaller batches to prevent timeout
             queue = prefs.getStringList(queueKey) ?? [];
             if (queue.isNotEmpty) {
               // Send max 50 locations per batch to avoid timeout
               const int batchSize = 50;
-              final int toSend = queue.length > batchSize ? batchSize : queue.length;
+              final int toSend = queue.length > batchSize
+                  ? batchSize
+                  : queue.length;
               final List<String> batchStrings = queue.sublist(0, toSend);
-              
+
               final List<Map<String, dynamic>> batch = batchStrings
                   .map((e) => jsonDecode(e) as Map<String, dynamic>)
                   .toList();
 
-              print('Attempting to send ${batch.length} of ${queue.length} locations...');
-              
+              print(
+                'Attempting to send ${batch.length} of ${queue.length} locations...',
+              );
+
               try {
                 final success = await apiService.sendLocations(batch);
 
@@ -370,7 +443,6 @@ void onStart(ServiceInstance service) async {
           } else {
             print('No internet. Data queued (${queue.length} locations).');
           }
-
         } catch (e, stackTrace) {
           print('Error in tracking loop: $e');
           print('Stack trace: $stackTrace');
@@ -384,9 +456,9 @@ void onStart(ServiceInstance service) async {
         service.stopSelf();
       }
     } else {
-       // No active session, stop service
-       await prefs.setBool(serviceRestartKey, false);
-       service.stopSelf();
+      // No active session, stop service
+      await prefs.setBool(serviceRestartKey, false);
+      service.stopSelf();
     }
   });
 }

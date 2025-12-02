@@ -36,9 +36,15 @@ async function initDB() {
                 session_id TEXT REFERENCES sessions(id),
                 latitude REAL,
                 longitude REAL,
+                accuracy REAL,
+                speed REAL,
                 timestamp BIGINT
             )
         `);
+        // Add columns if they don't exist (for existing databases)
+        await pool.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS accuracy REAL`);
+        await pool.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS speed REAL`);
+        
         await pool.query(`
             CREATE TABLE IF NOT EXISTS alerts (
                 id SERIAL PRIMARY KEY,
@@ -122,8 +128,8 @@ app.post('/api/location', async (req, res) => {
         let insertedCount = 0;
         for (const loc of locations) {
             await pool.query(
-                `INSERT INTO locations (session_id, latitude, longitude, timestamp) VALUES ($1, $2, $3, $4)`,
-                [sessionId, loc.latitude, loc.longitude, loc.timestamp || Date.now()]
+                `INSERT INTO locations (session_id, latitude, longitude, accuracy, speed, timestamp) VALUES ($1, $2, $3, $4, $5, $6)`,
+                [sessionId, loc.latitude, loc.longitude, loc.accuracy || null, loc.speed || null, loc.timestamp || Date.now()]
             );
             insertedCount++;
         }
@@ -151,7 +157,7 @@ app.get('/api/session/:id/locations', async (req, res) => {
     const sessionId = req.params.id;
     try {
         const result = await pool.query(
-            `SELECT id, session_id as "sessionId", latitude, longitude, timestamp FROM locations WHERE session_id = $1 ORDER BY timestamp ASC`,
+            `SELECT id, session_id as "sessionId", latitude, longitude, accuracy, speed, timestamp FROM locations WHERE session_id = $1 ORDER BY timestamp ASC`,
             [sessionId]
         );
         res.json(result.rows);
@@ -220,6 +226,177 @@ app.post('/api/alerts/read-all', async (req, res) => {
     try {
         await pool.query(`UPDATE alerts SET is_read = 1`);
         res.json({ message: 'All alerts marked as read' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ========== EXPORT & STATISTICS API ==========
+
+// Helper function to calculate distance between two points (Haversine)
+function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// Get session statistics
+app.get('/api/session/:id/stats', async (req, res) => {
+    const sessionId = req.params.id;
+    try {
+        // Get session info
+        const sessionResult = await pool.query(
+            `SELECT * FROM sessions WHERE id = $1`,
+            [sessionId]
+        );
+        
+        if (sessionResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        
+        const session = sessionResult.rows[0];
+        
+        // Get locations
+        const locResult = await pool.query(
+            `SELECT latitude, longitude, speed, accuracy, timestamp FROM locations WHERE session_id = $1 ORDER BY timestamp ASC`,
+            [sessionId]
+        );
+        
+        const locations = locResult.rows;
+        
+        // Calculate statistics
+        let totalDistanceKm = 0;
+        let maxSpeed = 0;
+        let totalSpeed = 0;
+        let speedCount = 0;
+        let minAccuracy = Infinity;
+        let maxAccuracy = 0;
+        
+        for (let i = 0; i < locations.length; i++) {
+            const loc = locations[i];
+            
+            // Distance from previous point
+            if (i > 0) {
+                const prev = locations[i - 1];
+                totalDistanceKm += calculateDistanceKm(
+                    prev.latitude, prev.longitude,
+                    loc.latitude, loc.longitude
+                );
+            }
+            
+            // Speed stats (convert m/s to km/h)
+            if (loc.speed !== null && loc.speed >= 0) {
+                const speedKmh = loc.speed * 3.6;
+                totalSpeed += speedKmh;
+                speedCount++;
+                if (speedKmh > maxSpeed) maxSpeed = speedKmh;
+            }
+            
+            // Accuracy stats
+            if (loc.accuracy !== null) {
+                if (loc.accuracy < minAccuracy) minAccuracy = loc.accuracy;
+                if (loc.accuracy > maxAccuracy) maxAccuracy = loc.accuracy;
+            }
+        }
+        
+        const startTime = parseInt(session.start_time);
+        const endTime = session.is_active ? Date.now() : parseInt(session.end_time);
+        const durationMs = endTime - startTime;
+        const durationHours = durationMs / (1000 * 60 * 60);
+        
+        res.json({
+            sessionId,
+            deviceId: session.device_id,
+            startTime,
+            endTime: session.is_active ? null : parseInt(session.end_time),
+            isActive: session.is_active === 1,
+            locationCount: locations.length,
+            totalDistanceKm: Math.round(totalDistanceKm * 100) / 100,
+            durationHours: Math.round(durationHours * 100) / 100,
+            avgSpeedKmh: speedCount > 0 ? Math.round((totalSpeed / speedCount) * 10) / 10 : 0,
+            maxSpeedKmh: Math.round(maxSpeed * 10) / 10,
+            avgAccuracyM: minAccuracy !== Infinity ? Math.round((minAccuracy + maxAccuracy) / 2) : null,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Export session as CSV
+app.get('/api/session/:id/export/csv', async (req, res) => {
+    const sessionId = req.params.id;
+    try {
+        const result = await pool.query(
+            `SELECT latitude, longitude, accuracy, speed, timestamp FROM locations WHERE session_id = $1 ORDER BY timestamp ASC`,
+            [sessionId]
+        );
+        
+        // Build CSV
+        let csv = 'timestamp,datetime,latitude,longitude,accuracy_m,speed_ms,speed_kmh\n';
+        for (const loc of result.rows) {
+            const timestamp = parseInt(loc.timestamp);
+            const datetime = new Date(timestamp).toISOString();
+            const speedKmh = loc.speed ? (loc.speed * 3.6).toFixed(2) : '';
+            csv += `${timestamp},${datetime},${loc.latitude},${loc.longitude},${loc.accuracy || ''},${loc.speed || ''},${speedKmh}\n`;
+        }
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="locus-${sessionId}.csv"`);
+        res.send(csv);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Export session as GPX
+app.get('/api/session/:id/export/gpx', async (req, res) => {
+    const sessionId = req.params.id;
+    try {
+        const sessionResult = await pool.query(`SELECT * FROM sessions WHERE id = $1`, [sessionId]);
+        const locResult = await pool.query(
+            `SELECT latitude, longitude, accuracy, speed, timestamp FROM locations WHERE session_id = $1 ORDER BY timestamp ASC`,
+            [sessionId]
+        );
+        
+        const session = sessionResult.rows[0];
+        const startTime = new Date(parseInt(session.start_time)).toISOString();
+        
+        // Build GPX
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Locus Tracker"
+    xmlns="http://www.topografix.com/GPX/1/1"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>Locus Track - ${sessionId}</name>
+    <time>${startTime}</time>
+  </metadata>
+  <trk>
+    <name>Session ${sessionId}</name>
+    <trkseg>
+`;
+        
+        for (const loc of locResult.rows) {
+            const timestamp = parseInt(loc.timestamp);
+            const time = new Date(timestamp).toISOString();
+            gpx += `      <trkpt lat="${loc.latitude}" lon="${loc.longitude}">
+        <time>${time}</time>
+${loc.speed !== null ? `        <extensions><speed>${loc.speed}</speed></extensions>\n` : ''}      </trkpt>
+`;
+        }
+        
+        gpx += `    </trkseg>
+  </trk>
+</gpx>`;
+        
+        res.setHeader('Content-Type', 'application/gpx+xml');
+        res.setHeader('Content-Disposition', `attachment; filename="locus-${sessionId}.gpx"`);
+        res.send(gpx);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

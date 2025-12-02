@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,14 +12,16 @@ import 'services/location_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeService();
-  
+
   // Check if service should be running and restart it if needed
   await _checkAndRestartService();
-  
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-  ));
+
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ),
+  );
 
   runApp(const LocusApp());
 }
@@ -29,7 +32,7 @@ Future<void> _checkAndRestartService() async {
   final shouldBeRunning = prefs.getBool('service_should_be_running') ?? false;
   final sessionId = prefs.getString('current_session_id');
   final endTime = prefs.getInt('session_end_time');
-  
+
   if (shouldBeRunning && sessionId != null && endTime != null) {
     // Check if session is still valid
     if (DateTime.now().millisecondsSinceEpoch < endTime) {
@@ -127,8 +130,8 @@ class _LockScreenState extends State<LockScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: isFilled 
-            ? (_showError ? Colors.red : Colors.white) 
+        color: isFilled
+            ? (_showError ? Colors.red : Colors.white)
             : Colors.transparent,
         border: Border.all(
           color: _showError ? Colors.red : Colors.grey[700]!,
@@ -156,7 +159,11 @@ class _LockScreenState extends State<LockScreen> {
                 ),
                 child: Center(
                   child: isBackspace
-                      ? const Icon(Icons.backspace_outlined, color: Colors.white, size: 24)
+                      ? const Icon(
+                          Icons.backspace_outlined,
+                          color: Colors.white,
+                          size: 24,
+                        )
                       : Text(
                           value,
                           style: const TextStyle(
@@ -183,13 +190,9 @@ class _LockScreenState extends State<LockScreen> {
           child: Column(
             children: [
               const Spacer(flex: 2),
-              
+
               // Logo/Title
-              Image.asset(
-                'assets/locus.png',
-                width: 80,
-                height: 80,
-              ),
+              Image.asset('assets/locus.png', width: 80, height: 80),
               const SizedBox(height: 24),
               const Text(
                 'LOCUS',
@@ -208,17 +211,17 @@ class _LockScreenState extends State<LockScreen> {
                   color: _showError ? Colors.red : Colors.grey,
                 ),
               ),
-              
+
               const SizedBox(height: 48),
-              
+
               // PIN Dots
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(6, (index) => _buildPinDot(index)),
               ),
-              
+
               const Spacer(),
-              
+
               // Keypad
               Column(
                 children: [
@@ -252,7 +255,7 @@ class _LockScreenState extends State<LockScreen> {
                   ),
                 ],
               ),
-              
+
               const Spacer(),
             ],
           ),
@@ -288,7 +291,7 @@ class _SetupScreenState extends State<SetupScreen> {
   Future<void> _checkFirstLaunch() async {
     final prefs = await SharedPreferences.getInstance();
     final isSetupDone = prefs.getBool('setup_complete') ?? false;
-    
+
     if (isSetupDone) {
       // Skip to home if already setup
       if (mounted) {
@@ -374,13 +377,9 @@ class _SetupScreenState extends State<SetupScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 40),
-              
+
               // Header
-              Image.asset(
-                'assets/locus.png',
-                width: 60,
-                height: 60,
-              ),
+              Image.asset('assets/locus.png', width: 60, height: 60),
               const SizedBox(height: 24),
               const Text(
                 'Setup',
@@ -392,22 +391,21 @@ class _SetupScreenState extends State<SetupScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                _currentStep == 0 
+                _currentStep == 0
                     ? 'Configure your server connection'
                     : 'Grant required permissions',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
-              
+
               const SizedBox(height: 48),
-              
+
               // Steps
               Expanded(
-                child: _currentStep == 0 ? _buildApiStep() : _buildPermissionsStep(),
+                child: _currentStep == 0
+                    ? _buildApiStep()
+                    : _buildPermissionsStep(),
               ),
-              
+
               // Navigation
               Row(
                 children: [
@@ -446,7 +444,9 @@ class _SetupScreenState extends State<SetupScreen> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: Text(_currentStep == 0 ? 'Next' : 'Complete Setup'),
+                        child: Text(
+                          _currentStep == 0 ? 'Next' : 'Complete Setup',
+                        ),
                       ),
                     ),
                   ),
@@ -500,7 +500,10 @@ class _SetupScreenState extends State<SetupScreen> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                 ),
               ),
             ],
@@ -511,10 +514,7 @@ class _SetupScreenState extends State<SetupScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Text(
             'Enter the URL where your Locus backend server is running. This is where location data will be sent.',
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey[600],
-            ),
+            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
           ),
         ),
       ],
@@ -556,10 +556,7 @@ class _SetupScreenState extends State<SetupScreen> {
             padding: const EdgeInsets.only(bottom: 16),
             child: Text(
               'Location permission is required to continue',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.red[400],
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.red[400]),
             ),
           ),
       ],
@@ -580,8 +577,8 @@ class _SetupScreenState extends State<SetupScreen> {
         color: const Color(0xFF18181B),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isGranted 
-              ? const Color(0xFF10B981).withOpacity(0.3) 
+          color: isGranted
+              ? const Color(0xFF10B981).withOpacity(0.3)
               : Colors.grey[800]!,
         ),
       ),
@@ -591,8 +588,8 @@ class _SetupScreenState extends State<SetupScreen> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: isGranted 
-                  ? const Color(0xFF10B981).withOpacity(0.1) 
+              color: isGranted
+                  ? const Color(0xFF10B981).withOpacity(0.1)
                   : Colors.grey[900],
               borderRadius: BorderRadius.circular(12),
             ),
@@ -621,10 +618,7 @@ class _SetupScreenState extends State<SetupScreen> {
                       const SizedBox(width: 6),
                       Text(
                         '*',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.red[400],
-                        ),
+                        style: TextStyle(fontSize: 16, color: Colors.red[400]),
                       ),
                     ],
                   ],
@@ -632,10 +626,7 @@ class _SetupScreenState extends State<SetupScreen> {
                 const SizedBox(height: 2),
                 Text(
                   description,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[500],
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[500]),
                 ),
               ],
             ),
@@ -648,7 +639,10 @@ class _SetupScreenState extends State<SetupScreen> {
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
                 backgroundColor: Colors.grey[800],
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -668,16 +662,25 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
   final ApiService _apiService = ApiService();
   final TextEditingController _urlController = TextEditingController();
-  
+
   bool _isTracking = false;
   String? _sessionId;
   int _durationHours = 12;
   String _deviceId = '...';
   String _statusMessage = 'Ready';
   late AnimationController _pulseController;
+
+  // New UX state
+  int? _sessionEndTime;
+  String _remainingTime = '';
+  int _queuedLocations = 0;
+  bool _isOffline = false;
+  double _lastAccuracy = 0;
+  Timer? _uiTimer;
 
   @override
   void initState() {
@@ -686,17 +689,63 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    
+
     _loadSettings();
     _checkPermissions();
     _getDeviceId();
     _checkActiveSession();
+
+    // Start UI update timer
+    _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _updateRemainingTime();
+      _updateQueueStatus();
+    });
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _uiTimer?.cancel();
     super.dispose();
+  }
+
+  void _updateRemainingTime() {
+    if (_sessionEndTime != null && _isTracking) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final remaining = _sessionEndTime! - now;
+
+      if (remaining > 0) {
+        final hours = (remaining / (1000 * 60 * 60)).floor();
+        final minutes = ((remaining % (1000 * 60 * 60)) / (1000 * 60)).floor();
+        final seconds = ((remaining % (1000 * 60)) / 1000).floor();
+
+        setState(() {
+          _remainingTime =
+              '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+        });
+      } else {
+        setState(() {
+          _remainingTime = '00:00:00';
+          _isTracking = false;
+          _statusMessage = 'Session Expired';
+        });
+      }
+    }
+  }
+
+  Future<void> _updateQueueStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final queue = prefs.getStringList('offline_location_queue') ?? [];
+    final lastAcc = prefs.getDouble('last_accuracy') ?? 0;
+    final isOffline = prefs.getBool('is_offline') ?? false;
+
+    if (mounted) {
+      setState(() {
+        _queuedLocations = queue.length;
+        _lastAccuracy = lastAcc;
+        _isOffline = isOffline;
+      });
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -758,6 +807,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         setState(() {
           _isTracking = true;
           _sessionId = sessionId;
+          _sessionEndTime = endTime;
           _statusMessage = 'Tracking Active';
         });
       } else {
@@ -791,6 +841,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       setState(() {
         _isTracking = true;
         _sessionId = sessionId;
+        _sessionEndTime = endTime;
         _statusMessage = 'Tracking Active';
       });
     } else {
@@ -814,6 +865,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     setState(() {
       _isTracking = false;
       _sessionId = null;
+      _sessionEndTime = null;
+      _remainingTime = '';
       _statusMessage = 'Session Stopped';
     });
   }
@@ -854,12 +907,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(Icons.settings_outlined, color: Colors.grey),
+                    icon: const Icon(
+                      Icons.settings_outlined,
+                      color: Colors.grey,
+                    ),
                     onPressed: () => _showSettingsDialog(),
                   ),
                 ],
               ),
-              
+
               const Spacer(),
 
               // Main Status Card
@@ -871,8 +927,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     color: const Color(0xFF18181B),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: _isTracking 
-                          ? const Color(0xFF10B981).withOpacity(0.3) 
+                      color: _isTracking
+                          ? const Color(0xFF10B981).withOpacity(0.3)
                           : Colors.white.withOpacity(0.05),
                     ),
                     boxShadow: [
@@ -897,14 +953,20 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                 height: 80,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFF10B981).withOpacity(0.2),
+                                  color: const Color(
+                                    0xFF10B981,
+                                  ).withOpacity(0.2),
                                 ),
                               ),
                             ),
                           Icon(
-                            _isTracking ? Icons.radar : Icons.location_off_outlined,
+                            _isTracking
+                                ? Icons.radar
+                                : Icons.location_off_outlined,
                             size: 40,
-                            color: _isTracking ? const Color(0xFF10B981) : Colors.grey,
+                            color: _isTracking
+                                ? const Color(0xFF10B981)
+                                : Colors.grey,
                           ),
                         ],
                       ),
@@ -915,13 +977,41 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 1,
-                          color: _isTracking ? const Color(0xFF10B981) : Colors.grey,
+                          color: _isTracking
+                              ? const Color(0xFF10B981)
+                              : Colors.grey,
                         ),
                       ),
+                      // Remaining time countdown
+                      if (_isTracking && _remainingTime.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          _remainingTime,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 32,
+                            fontWeight: FontWeight.w300,
+                            color: Colors.white,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'REMAINING',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[600],
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
                       if (_sessionId != null) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.3),
                             borderRadius: BorderRadius.circular(12),
@@ -934,6 +1024,42 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               color: Colors.grey,
                             ),
                           ),
+                        ),
+                      ],
+                      // Status indicators row
+                      if (_isTracking) ...[
+                        const SizedBox(height: 16),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            // GPS Accuracy indicator
+                            _buildStatusChip(
+                              icon: Icons.gps_fixed,
+                              label: _lastAccuracy > 0
+                                  ? '±${_lastAccuracy.toStringAsFixed(0)}m'
+                                  : '--',
+                              color: _getAccuracyColor(_lastAccuracy),
+                            ),
+                            // Connection status
+                            _buildStatusChip(
+                              icon: _isOffline
+                                  ? Icons.cloud_off
+                                  : Icons.cloud_done,
+                              label: _isOffline ? 'Offline' : 'Online',
+                              color: _isOffline
+                                  ? Colors.orange
+                                  : const Color(0xFF10B981),
+                            ),
+                            // Queue indicator
+                            if (_queuedLocations > 0)
+                              _buildStatusChip(
+                                icon: Icons.schedule,
+                                label: '$_queuedLocations queued',
+                                color: Colors.orange,
+                              ),
+                          ],
                         ),
                       ],
                     ],
@@ -980,7 +1106,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF18181B),
                         borderRadius: BorderRadius.circular(8),
@@ -1043,15 +1172,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   ),
                 ),
               ],
-              
+
               const SizedBox(height: 16),
               Center(
                 child: Text(
                   'Device ID: ${_deviceId.length > 8 ? "${_deviceId.substring(0, 8)}..." : _deviceId}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey[800],
-                  ),
+                  style: TextStyle(fontSize: 10, color: Colors.grey[800]),
                 ),
               ),
             ],
@@ -1103,5 +1229,43 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         ],
       ),
     );
+  }
+
+  Widget _buildStatusChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getAccuracyColor(double accuracy) {
+    if (accuracy <= 0) return Colors.grey;
+    if (accuracy <= 10) return const Color(0xFF10B981); // Excellent
+    if (accuracy <= 30) return const Color(0xFF3B82F6); // Good
+    if (accuracy <= 100) return Colors.orange; // Fair
+    return Colors.red; // Poor
   }
 }

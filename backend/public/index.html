@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #09090b; color: #e4e4e7; }
@@ -105,7 +106,7 @@
     </aside>
 
     <!-- Floating Info Panel (Hidden by default) -->
-    <div id="session-info" class="fixed md:absolute top-4 left-4 right-4 md:left-auto md:right-4 w-auto md:w-72 glass-panel rounded-2xl p-4 md:p-6 shadow-2xl z-[1000] hidden transition-all duration-300 opacity-0 translate-y-2">
+    <div id="session-info" class="fixed md:absolute top-4 left-4 right-4 md:left-auto md:right-4 w-auto md:w-80 glass-panel rounded-2xl p-4 md:p-6 shadow-2xl z-[1000] hidden transition-all duration-300 opacity-0 translate-y-2 max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-start mb-4 md:mb-6">
             <div>
                 <h2 class="text-sm font-medium text-zinc-400 uppercase tracking-wider">Session Details</h2>
@@ -132,6 +133,75 @@
                 <span id="info-duration" class="text-xs text-zinc-300"></span>
             </div>
         </div>
+
+        <!-- Statistics Section -->
+        <div class="mt-6 pt-4 border-t border-white/10">
+            <h3 class="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">Statistics</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-white/5 rounded-xl p-3 text-center">
+                    <div id="stat-distance" class="text-lg font-medium text-emerald-400">-</div>
+                    <div class="text-[10px] text-zinc-500">Distance (km)</div>
+                </div>
+                <div class="bg-white/5 rounded-xl p-3 text-center">
+                    <div id="stat-avg-speed" class="text-lg font-medium text-blue-400">-</div>
+                    <div class="text-[10px] text-zinc-500">Avg Speed (km/h)</div>
+                </div>
+                <div class="bg-white/5 rounded-xl p-3 text-center">
+                    <div id="stat-max-speed" class="text-lg font-medium text-orange-400">-</div>
+                    <div class="text-[10px] text-zinc-500">Max Speed (km/h)</div>
+                </div>
+                <div class="bg-white/5 rounded-xl p-3 text-center">
+                    <div id="stat-accuracy" class="text-lg font-medium text-purple-400">-</div>
+                    <div class="text-[10px] text-zinc-500">Avg Accuracy (m)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View Mode Toggle -->
+        <div class="mt-4 flex gap-2">
+            <button onclick="setViewMode('path')" id="btn-path" class="flex-1 py-2 px-3 text-[10px] font-medium rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Path
+            </button>
+            <button onclick="setViewMode('heatmap')" id="btn-heatmap" class="flex-1 py-2 px-3 text-[10px] font-medium rounded-lg bg-white/5 text-zinc-400 border border-white/10 hover:bg-white/10">
+                Heatmap
+            </button>
+            <button onclick="setViewMode('speed')" id="btn-speed" class="flex-1 py-2 px-3 text-[10px] font-medium rounded-lg bg-white/5 text-zinc-400 border border-white/10 hover:bg-white/10">
+                Speed
+            </button>
+        </div>
+
+        <!-- Playback Controls -->
+        <div class="mt-4 pt-4 border-t border-white/10">
+            <h3 class="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">Playback</h3>
+            <div class="flex items-center gap-2 mb-2">
+                <button onclick="togglePlayback()" id="playback-btn" class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all">
+                    <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                </button>
+                <input type="range" id="playback-slider" min="0" max="100" value="0" class="flex-1 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer" onchange="seekPlayback(this.value)">
+                <span id="playback-time" class="text-[10px] text-zinc-500 w-16 text-right">00:00</span>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="setPlaybackSpeed(0.5)" class="text-[10px] px-2 py-1 rounded bg-white/5 text-zinc-400 hover:bg-white/10">0.5x</button>
+                <button onclick="setPlaybackSpeed(1)" class="text-[10px] px-2 py-1 rounded bg-white/10 text-zinc-300">1x</button>
+                <button onclick="setPlaybackSpeed(2)" class="text-[10px] px-2 py-1 rounded bg-white/5 text-zinc-400 hover:bg-white/10">2x</button>
+                <button onclick="setPlaybackSpeed(5)" class="text-[10px] px-2 py-1 rounded bg-white/5 text-zinc-400 hover:bg-white/10">5x</button>
+            </div>
+        </div>
+
+        <!-- Export Section -->
+        <div class="mt-4 pt-4 border-t border-white/10">
+            <h3 class="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">Export Data</h3>
+            <div class="flex gap-2">
+                <button onclick="exportCSV()" class="flex-1 py-2 px-3 text-xs font-medium rounded-lg bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 transition-all">
+                    📄 CSV
+                </button>
+                <button onclick="exportGPX()" class="flex-1 py-2 px-3 text-xs font-medium rounded-lg bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 transition-all">
+                    🗺️ GPX
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -152,8 +222,19 @@
         let currentPolyline = null;
         let currentPolylineBg = null;
         let currentMarkers = [];
+        let currentHeatLayer = null;
+        let speedPolylines = [];
         let activeSessionId = null;
         let refreshInterval = null;
+        let currentLocations = [];
+        let viewMode = 'path'; // 'path', 'heatmap', 'speed'
+        
+        // Playback state
+        let playbackMarker = null;
+        let isPlaying = false;
+        let playbackIndex = 0;
+        let playbackSpeed = 1;
+        let playbackInterval = null;
 
         // Fetch Sessions
         async function fetchSessions() {
@@ -245,12 +326,13 @@
             document.getElementById('info-duration').textContent = `${diffHrs} hrs`;
 
             // Clear map
-            if (currentPolyline) map.removeLayer(currentPolyline);
-            if (currentPolylineBg) map.removeLayer(currentPolylineBg);
-            currentMarkers.forEach(m => map.removeLayer(m));
-            currentMarkers = [];
+            clearMapLayers();
+            
+            // Stop any playback
+            stopPlayback();
 
             await updateMapData(session.id);
+            await fetchSessionStats(session.id);
 
             // Start polling if active
             if (refreshInterval) clearInterval(refreshInterval);
@@ -258,85 +340,342 @@
                 refreshInterval = setInterval(() => updateMapData(session.id), 20000);
             }
         }
+        
+        function clearMapLayers() {
+            if (currentPolyline) map.removeLayer(currentPolyline);
+            if (currentPolylineBg) map.removeLayer(currentPolylineBg);
+            if (currentHeatLayer) map.removeLayer(currentHeatLayer);
+            speedPolylines.forEach(p => map.removeLayer(p));
+            speedPolylines = [];
+            currentMarkers.forEach(m => map.removeLayer(m));
+            currentMarkers = [];
+            if (playbackMarker) map.removeLayer(playbackMarker);
+            playbackMarker = null;
+        }
+        
+        async function fetchSessionStats(sessionId) {
+            try {
+                const res = await fetch(`/api/session/${sessionId}/stats`);
+                const stats = await res.json();
+                
+                document.getElementById('stat-distance').textContent = stats.totalDistanceKm || '-';
+                document.getElementById('stat-avg-speed').textContent = stats.avgSpeedKmh || '-';
+                document.getElementById('stat-max-speed').textContent = stats.maxSpeedKmh || '-';
+                document.getElementById('stat-accuracy').textContent = stats.avgAccuracyM || '-';
+            } catch (err) {
+                console.error('Error fetching stats:', err);
+            }
+        }
 
         async function updateMapData(sessionId) {
             try {
                 const res = await fetch(`/api/session/${sessionId}/locations`);
-                const locations = await res.json();
+                currentLocations = await res.json();
                 
-                document.getElementById('info-points').textContent = locations.length;
-                if (locations.length > 0) {
-                    const lastLoc = locations[locations.length - 1];
+                document.getElementById('info-points').textContent = currentLocations.length;
+                if (currentLocations.length > 0) {
+                    const lastLoc = currentLocations[currentLocations.length - 1];
                     const lastTimestamp = parseInt(lastLoc.timestamp) || new Date(lastLoc.timestamp).getTime();
                     document.getElementById('info-last').textContent = new Date(lastTimestamp).toLocaleTimeString();
                 } else {
                     document.getElementById('info-last').textContent = '-';
                 }
+                
+                // Update playback slider max
+                document.getElementById('playback-slider').max = Math.max(0, currentLocations.length - 1);
 
-                const latlngs = locations.map(loc => [loc.latitude, loc.longitude]);
-
-                // Update Polylines - Background glow + Animated foreground
-                if (currentPolyline) map.removeLayer(currentPolyline);
-                if (currentPolylineBg) map.removeLayer(currentPolylineBg);
-
-                // Background glow line
-                currentPolylineBg = L.polyline(latlngs, { 
-                    color: '#10b981',
-                    weight: 8, 
-                    opacity: 0.2,
-                    lineCap: 'round',
-                    lineJoin: 'round'
-                }).addTo(map);
-
-                // Main path line
-                currentPolyline = L.polyline(latlngs, { 
-                    color: '#10b981', // Emerald 500
-                    weight: 3, 
-                    opacity: 0.9,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                    className: 'animated-path'
-                }).addTo(map);
-
-                // Fit map to show entire path
-                if (latlngs.length > 1) {
-                    map.fitBounds(currentPolyline.getBounds(), { padding: [50, 50] });
-                }
-
-                // Update Markers
-                currentMarkers.forEach(m => map.removeLayer(m));
-                currentMarkers = [];
-
-                if (latlngs.length > 0) {
-                    // Start Marker
-                    const startIcon = L.divIcon({
-                        className: 'bg-transparent',
-                        html: '<div class="w-3 h-3 bg-white rounded-full border-2 border-emerald-500 shadow-lg"></div>'
-                    });
-                    currentMarkers.push(L.marker(latlngs[0], { icon: startIcon }).addTo(map));
-
-                    // End/Current Marker
-                    const endIcon = L.divIcon({
-                        className: 'bg-transparent',
-                        html: '<div class="w-4 h-4 bg-emerald-500 rounded-full border-2 border-white shadow-[0_0_15px_rgba(16,185,129,0.6)] animate-pulse"></div>'
-                    });
-                    currentMarkers.push(L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).addTo(map));
-
-                    // Add intermediate waypoint markers for long paths
-                    if (latlngs.length > 5) {
-                        const step = Math.floor(latlngs.length / 5);
-                        for (let i = step; i < latlngs.length - 1; i += step) {
-                            const waypointIcon = L.divIcon({
-                                className: 'bg-transparent',
-                                html: '<div class="w-2 h-2 bg-emerald-400/50 rounded-full border border-emerald-500/30"></div>'
-                            });
-                            currentMarkers.push(L.marker(latlngs[i], { icon: waypointIcon }).addTo(map));
-                        }
-                    }
-                }
+                // Render based on view mode
+                renderMapView();
             } catch (err) {
                 console.error('Error fetching locations:', err);
             }
+        }
+        
+        function renderMapView() {
+            clearMapLayers();
+            
+            if (currentLocations.length === 0) return;
+            
+            const latlngs = currentLocations.map(loc => [loc.latitude, loc.longitude]);
+            
+            if (viewMode === 'path') {
+                renderPathView(latlngs);
+            } else if (viewMode === 'heatmap') {
+                renderHeatmapView();
+            } else if (viewMode === 'speed') {
+                renderSpeedView();
+            }
+            
+            // Fit map to show entire path
+            if (latlngs.length > 1) {
+                const bounds = L.latLngBounds(latlngs);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+            
+            // Add start/end markers
+            addMarkers(latlngs);
+        }
+        
+        function renderPathView(latlngs) {
+            // Background glow line
+            currentPolylineBg = L.polyline(latlngs, { 
+                color: '#10b981',
+                weight: 8, 
+                opacity: 0.2,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(map);
+
+            // Main path line
+            currentPolyline = L.polyline(latlngs, { 
+                color: '#10b981',
+                weight: 3, 
+                opacity: 0.9,
+                lineCap: 'round',
+                lineJoin: 'round',
+                className: 'animated-path'
+            }).addTo(map);
+        }
+        
+        function renderHeatmapView() {
+            const heatData = currentLocations.map(loc => [loc.latitude, loc.longitude, 0.5]);
+            currentHeatLayer = L.heatLayer(heatData, {
+                radius: 25,
+                blur: 15,
+                maxZoom: 17,
+                gradient: {
+                    0.0: '#09090b',
+                    0.2: '#10b981',
+                    0.4: '#3b82f6',
+                    0.6: '#f59e0b',
+                    0.8: '#ef4444',
+                    1.0: '#ffffff'
+                }
+            }).addTo(map);
+        }
+        
+        function renderSpeedView() {
+            // Color-code path segments by speed
+            for (let i = 1; i < currentLocations.length; i++) {
+                const prev = currentLocations[i - 1];
+                const curr = currentLocations[i];
+                const speedKmh = (curr.speed || 0) * 3.6;
+                
+                const color = getSpeedColor(speedKmh);
+                
+                const segment = L.polyline([
+                    [prev.latitude, prev.longitude],
+                    [curr.latitude, curr.longitude]
+                ], {
+                    color: color,
+                    weight: 4,
+                    opacity: 0.9,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                }).addTo(map);
+                
+                // Add popup with speed info
+                segment.bindPopup(`<div class="text-sm"><strong>${speedKmh.toFixed(1)} km/h</strong></div>`);
+                
+                speedPolylines.push(segment);
+            }
+            
+            // Add legend
+            addSpeedLegend();
+        }
+        
+        function getSpeedColor(speedKmh) {
+            if (speedKmh < 5) return '#10b981';  // Green - stationary/walking
+            if (speedKmh < 20) return '#3b82f6'; // Blue - cycling
+            if (speedKmh < 50) return '#f59e0b'; // Orange - city driving
+            if (speedKmh < 100) return '#ef4444'; // Red - highway
+            return '#ec4899'; // Pink - very fast
+        }
+        
+        function addSpeedLegend() {
+            // Remove existing legend if any
+            const existingLegend = document.querySelector('.speed-legend');
+            if (existingLegend) existingLegend.remove();
+            
+            const legend = L.control({ position: 'bottomleft' });
+            legend.onAdd = function(map) {
+                const div = L.DomUtil.create('div', 'speed-legend glass-panel p-3 rounded-xl');
+                div.innerHTML = `
+                    <div class="text-[10px] text-zinc-400 mb-2 font-medium">SPEED (km/h)</div>
+                    <div class="flex flex-col gap-1 text-[10px]">
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded" style="background:#10b981"></span> <5 (Walk)</div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded" style="background:#3b82f6"></span> 5-20 (Cycle)</div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded" style="background:#f59e0b"></span> 20-50 (City)</div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded" style="background:#ef4444"></span> 50-100 (Highway)</div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded" style="background:#ec4899"></span> >100 (Fast)</div>
+                    </div>
+                `;
+                return div;
+            };
+            legend.addTo(map);
+        }
+        
+        function addMarkers(latlngs) {
+            if (latlngs.length === 0) return;
+            
+            // Start Marker
+            const startIcon = L.divIcon({
+                className: 'bg-transparent',
+                html: '<div class="w-3 h-3 bg-white rounded-full border-2 border-emerald-500 shadow-lg"></div>'
+            });
+            currentMarkers.push(L.marker(latlngs[0], { icon: startIcon }).addTo(map));
+
+            // End/Current Marker
+            const endIcon = L.divIcon({
+                className: 'bg-transparent',
+                html: '<div class="w-4 h-4 bg-emerald-500 rounded-full border-2 border-white shadow-[0_0_15px_rgba(16,185,129,0.6)] animate-pulse"></div>'
+            });
+            currentMarkers.push(L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).addTo(map));
+        }
+        
+        function setViewMode(mode) {
+            viewMode = mode;
+            
+            // Update button styles
+            ['path', 'heatmap', 'speed'].forEach(m => {
+                const btn = document.getElementById(`btn-${m}`);
+                if (m === mode) {
+                    btn.className = 'flex-1 py-2 px-3 text-[10px] font-medium rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                } else {
+                    btn.className = 'flex-1 py-2 px-3 text-[10px] font-medium rounded-lg bg-white/5 text-zinc-400 border border-white/10 hover:bg-white/10';
+                }
+            });
+            
+            // Remove speed legend if not in speed mode
+            if (mode !== 'speed') {
+                const legend = document.querySelector('.speed-legend');
+                if (legend) legend.remove();
+            }
+            
+            renderMapView();
+        }
+        
+        // ========== PLAYBACK FUNCTIONS ==========
+        
+        function togglePlayback() {
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                startPlayback();
+            }
+        }
+        
+        function startPlayback() {
+            if (currentLocations.length === 0) return;
+            
+            isPlaying = true;
+            updatePlayIcon();
+            
+            // Create playback marker if not exists
+            if (!playbackMarker) {
+                const playIcon = L.divIcon({
+                    className: 'bg-transparent',
+                    html: '<div class="w-6 h-6 bg-blue-500 rounded-full border-3 border-white shadow-[0_0_20px_rgba(59,130,246,0.8)] flex items-center justify-center"><div class="w-2 h-2 bg-white rounded-full"></div></div>'
+                });
+                playbackMarker = L.marker([currentLocations[0].latitude, currentLocations[0].longitude], { 
+                    icon: playIcon,
+                    zIndexOffset: 1000
+                }).addTo(map);
+            }
+            
+            playbackInterval = setInterval(() => {
+                if (playbackIndex >= currentLocations.length - 1) {
+                    stopPlayback();
+                    return;
+                }
+                
+                playbackIndex++;
+                updatePlaybackPosition();
+            }, 500 / playbackSpeed);
+        }
+        
+        function stopPlayback() {
+            isPlaying = false;
+            updatePlayIcon();
+            if (playbackInterval) {
+                clearInterval(playbackInterval);
+                playbackInterval = null;
+            }
+        }
+        
+        function updatePlayIcon() {
+            const icon = document.getElementById('play-icon');
+            if (isPlaying) {
+                icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+            } else {
+                icon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+            }
+        }
+        
+        function updatePlaybackPosition() {
+            if (!playbackMarker || currentLocations.length === 0) return;
+            
+            const loc = currentLocations[playbackIndex];
+            playbackMarker.setLatLng([loc.latitude, loc.longitude]);
+            
+            // Update slider
+            document.getElementById('playback-slider').value = playbackIndex;
+            
+            // Update time display
+            const timestamp = parseInt(loc.timestamp) || new Date(loc.timestamp).getTime();
+            document.getElementById('playback-time').textContent = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            // Center map on marker
+            map.panTo([loc.latitude, loc.longitude], { animate: true, duration: 0.3 });
+        }
+        
+        function seekPlayback(value) {
+            playbackIndex = parseInt(value);
+            
+            if (!playbackMarker && currentLocations.length > 0) {
+                const playIcon = L.divIcon({
+                    className: 'bg-transparent',
+                    html: '<div class="w-6 h-6 bg-blue-500 rounded-full border-3 border-white shadow-[0_0_20px_rgba(59,130,246,0.8)] flex items-center justify-center"><div class="w-2 h-2 bg-white rounded-full"></div></div>'
+                });
+                playbackMarker = L.marker([currentLocations[0].latitude, currentLocations[0].longitude], { 
+                    icon: playIcon,
+                    zIndexOffset: 1000
+                }).addTo(map);
+            }
+            
+            updatePlaybackPosition();
+        }
+        
+        function setPlaybackSpeed(speed) {
+            playbackSpeed = speed;
+            
+            // Update button styles
+            document.querySelectorAll('[onclick^="setPlaybackSpeed"]').forEach(btn => {
+                const btnSpeed = parseFloat(btn.textContent);
+                if (btnSpeed === speed) {
+                    btn.className = 'text-[10px] px-2 py-1 rounded bg-white/10 text-zinc-300';
+                } else {
+                    btn.className = 'text-[10px] px-2 py-1 rounded bg-white/5 text-zinc-400 hover:bg-white/10';
+                }
+            });
+            
+            // Restart playback with new speed if playing
+            if (isPlaying) {
+                stopPlayback();
+                startPlayback();
+            }
+        }
+        
+        // ========== EXPORT FUNCTIONS ==========
+        
+        function exportCSV() {
+            if (!activeSessionId) return;
+            window.open(`/api/session/${activeSessionId}/export/csv`, '_blank');
+        }
+        
+        function exportGPX() {
+            if (!activeSessionId) return;
+            window.open(`/api/session/${activeSessionId}/export/gpx`, '_blank');
         }
 
         // Initial Load
