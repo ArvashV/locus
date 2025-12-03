@@ -171,7 +171,6 @@ app.get('/api/session/:id/locations', async (req, res) => {
 // Device IDs to ignore for geofence alerts (trusted devices)
 const IGNORED_GEOFENCE_DEVICE_IDS = [
     'AP3A.240905.015.A2',
-    'UKQ1.230924.001',
 ];
 
 // Report an alert
