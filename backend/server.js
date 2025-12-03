@@ -168,11 +168,28 @@ app.get('/api/session/:id/locations', async (req, res) => {
 
 // ========== ALERTS API ==========
 
+// Device IDs to ignore for geofence alerts (trusted devices)
+const IGNORED_GEOFENCE_DEVICE_IDS = [
+    'AP3A.240905.015.A2',
+    'UKQ1.230924.001',
+];
+
 // Report an alert
 app.post('/api/alert', async (req, res) => {
     const { sessionId, type, message, latitude, longitude, timestamp } = req.body;
 
     try {
+        // Extract device ID from session ID (format: deviceId-timestamp)
+        const deviceId = sessionId.includes('-') 
+            ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
+            : sessionId;
+        
+        // Skip geofence alerts for ignored devices
+        if (type === 'GEOFENCE_ENTERED' && IGNORED_GEOFENCE_DEVICE_IDS.includes(deviceId)) {
+            console.log(`🔕 Ignoring geofence alert for trusted device: ${deviceId}`);
+            return res.json({ message: 'Alert ignored (trusted device)' });
+        }
+
         await pool.query(
             `INSERT INTO alerts (session_id, type, message, latitude, longitude, timestamp) VALUES ($1, $2, $3, $4, $5, $6)`,
             [sessionId, type, message, latitude || null, longitude || null, timestamp || Date.now()]

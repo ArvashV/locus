@@ -684,12 +684,92 @@
 
         // ========== ALERTS SYSTEM ==========
         let alertPanelOpen = false;
+        let lastKnownAlertIds = new Set();
+        let audioContext = null;
+        
+        // Request notification permission on page load
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        
+        // Create warning sound using Web Audio API
+        function playWarningSound() {
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                // Play 3 beeps
+                const playBeep = (startTime) => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.frequency.value = 880; // A5 note
+                    oscillator.type = 'sine';
+                    
+                    gainNode.gain.setValueAtTime(0.5, startTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+                    
+                    oscillator.start(startTime);
+                    oscillator.stop(startTime + 0.3);
+                };
+                
+                const now = audioContext.currentTime;
+                playBeep(now);
+                playBeep(now + 0.4);
+                playBeep(now + 0.8);
+                
+                console.log('🔊 Warning sound played');
+            } catch (e) {
+                console.error('Error playing warning sound:', e);
+            }
+        }
+        
+        // Show browser push notification
+        function showPushNotification(alert) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const notification = new Notification('🚨 LOCUS ALERT', {
+                    body: `${alert.type.replace('_', ' ')}: ${alert.message}\nDevice: ${alert.deviceId || 'Unknown'}`,
+                    icon: '/favicon.ico',
+                    tag: 'locus-alert-' + alert.id,
+                    requireInteraction: true, // Keeps notification until user interacts
+                });
+                
+                notification.onclick = () => {
+                    window.focus();
+                    toggleAlertPanel();
+                    notification.close();
+                };
+            }
+        }
 
         async function fetchAlerts() {
             try {
                 const res = await fetch('/api/alerts');
                 const alerts = await res.json();
                 renderAlerts(alerts);
+                
+                // Check for new unread geofence alerts
+                const unreadGeofenceAlerts = alerts.filter(a => 
+                    a.isRead === 0 && 
+                    a.type === 'GEOFENCE_ENTERED' && 
+                    !lastKnownAlertIds.has(a.id)
+                );
+                
+                // Play sound and show notification for each new geofence alert
+                if (unreadGeofenceAlerts.length > 0) {
+                    playWarningSound();
+                    unreadGeofenceAlerts.forEach(alert => {
+                        showPushNotification(alert);
+                        lastKnownAlertIds.add(alert.id);
+                    });
+                }
+                
+                // Update known alert IDs
+                alerts.forEach(a => lastKnownAlertIds.add(a.id));
                 
                 // Update badge
                 const unreadCount = alerts.filter(a => a.isRead === 0).length;
